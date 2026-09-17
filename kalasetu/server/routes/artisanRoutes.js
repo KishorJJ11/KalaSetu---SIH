@@ -52,6 +52,31 @@ router.post(
   })
 );
 
+// POST /api/artisans/login
+router.post(
+  '/login',
+  asyncHandler(async (req, res) => {
+    const { phone } = req.body;
+
+    if (!phone) {
+      res.status(400);
+      throw new Error('Phone number is required.');
+    }
+
+    const artisan = await Artisan.findOne({ phone });
+    if (!artisan) {
+      res.status(404);
+      throw new Error('Phone number not registered. Please sign up.');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful.',
+      data: artisan,
+    });
+  })
+);
+
 // GET /api/artisans/:artisanId
 router.get(
   '/:artisanId',
