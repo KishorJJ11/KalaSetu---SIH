@@ -6,6 +6,7 @@ import { useArtisan } from '../context/ArtisanContext';
 import { COLORS } from '../theme/theme';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
+import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
 import StudioCameraScreen from '../screens/StudioCameraScreen';
 import SmartPricingScreen from '../screens/SmartPricingScreen';
@@ -31,7 +32,10 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={screenOptions}>
         {!isAuthenticated ? (
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <>
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Home" component={HomeScreen} />

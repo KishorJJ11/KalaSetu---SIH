@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 // Update this to your machine's LAN IP when testing on a physical device,
 // e.g. 'http://192.168.1.42:5000'. Android emulator uses 10.0.2.2 to reach
 // the host machine's localhost.
-const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+const DEV_HOST = '192.168.150.193';
 export const API_BASE_URL = `http://${DEV_HOST}:5000`;
 
 const api = axios.create({
@@ -15,6 +15,11 @@ const api = axios.create({
 // ---------- Artisan endpoints ----------
 export async function registerArtisan(payload) {
   const { data } = await api.post('/api/artisans/register', payload);
+  return data;
+}
+
+export async function loginArtisan(phone) {
+  const { data } = await api.post('/api/artisans/login', { phone });
   return data;
 }
 

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/theme';
@@ -21,6 +22,7 @@ import { registerArtisan } from '../utils/api';
 import { useArtisan } from '../context/ArtisanContext';
 
 export default function OnboardingScreen() {
+  const navigation = useNavigation();
   const { signIn } = useArtisan();
 
   const [step, setStep] = useState(1);
@@ -114,6 +116,20 @@ export default function OnboardingScreen() {
                 disabled={!canContinueStep1}
                 onPress={() => setStep(2)}
                 style={{ marginTop: SPACING.lg }}
+              />
+            </View>
+          )}
+
+          {step === 1 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: SPACING.xl }}>
+              <Text style={{ fontSize: FONT.size.sm, color: COLORS.textSecondary }}>Already have an account? </Text>
+              <PrimaryButton
+                label="Login here"
+                variant="text"
+                fullWidth={false}
+                onPress={() => navigation.navigate('Login')}
+                textStyle={{ fontSize: FONT.size.sm, fontWeight: FONT.weight.bold }}
+                style={{ paddingHorizontal: 0, height: 'auto' }}
               />
             </View>
           )}

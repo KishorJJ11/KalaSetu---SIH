@@ -43,7 +43,9 @@
           "photosPermission": "KalaSetu accesses your photos to select craft images to catalog."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-sharing",
+      "expo-status-bar"
     ]
   }
 }
