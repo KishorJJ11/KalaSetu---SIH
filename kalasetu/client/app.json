@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "KalaSetu",
+    "slug": "kalasetu",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "in.gov.mosje.kalasetu"
+    },
+    "android": {
+      "package": "in.gov.mosje.kalasetu",
+      "adaptiveIcon": {
+        "backgroundColor": "#E65100"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "KalaSetu uses the camera to photograph your craft for AI studio enhancement."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "KalaSetu accesses your photos to select craft images to catalog."
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}
