@@ -76,6 +76,9 @@ async def enhance_image(file: UploadFile = File(...), return_format: str = Form(
     start = time.monotonic()
     try:
         enhanced_bytes = enhance_product_image(raw_bytes)
+    except ValueError as ve:
+        logger.warning(f"Image rejected: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as exc:  # noqa: BLE001
         logger.exception("Image enhancement failed")
         raise HTTPException(status_code=500, detail=f"Image enhancement failed: {exc}") from exc

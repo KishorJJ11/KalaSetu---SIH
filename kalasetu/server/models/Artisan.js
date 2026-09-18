@@ -98,7 +98,6 @@ const artisanSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-artisanSchema.index({ phone: 1 }, { unique: true });
 artisanSchema.index({ state: 1, craftCategory: 1 });
 
 artisanSchema.methods.toPublicJSON = function toPublicJSON() {

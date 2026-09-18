@@ -50,6 +50,8 @@ def _build_drop_shadow(cutout: Image.Image, canvas_size: Tuple[int, int]) -> Ima
     return flat_shadow
 
 
+import numpy as np
+
 def enhance_product_image(image_bytes: bytes) -> bytes:
     """
     Full enhancement pipeline:
@@ -63,6 +65,14 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     """
     input_img = Image.open(io.BytesIO(image_bytes))
     input_img = ImageOps.exif_transpose(input_img)  # respect phone camera orientation
+    
+    # --- Blur Detection ---
+    laplacian_kernel = ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1)
+    edges = input_img.convert("L").filter(laplacian_kernel)
+    variance = np.var(np.array(edges, dtype=np.float64))
+    if variance < 100:
+        raise ValueError("The photo is not clear. Please capture the image in a good quality.")
+        
     if input_img.mode != "RGBA":
         input_img = input_img.convert("RGBA")
 
@@ -80,10 +90,7 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     cutout_bytes = remove(
         input_img,
         session=_SESSION,
-        alpha_matting=True,
-        alpha_matting_foreground_threshold=240,
-        alpha_matting_background_threshold=15,
-        alpha_matting_erode_size=8,
+        alpha_matting=False,  # disabled for sharper edges
     )
     cutout = cutout_bytes if isinstance(cutout_bytes, Image.Image) else Image.open(
         io.BytesIO(cutout_bytes)
@@ -106,18 +113,13 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     new_size = (max(1, int(cutout.width * scale)), max(1, int(cutout.height * scale)))
     cutout = cutout.resize(new_size, Image.LANCZOS)
 
-    # Step 4: build canvas + shadow
+    # Step 4: build canvas (Shadow removed)
     canvas = Image.new("RGBA", STUDIO_CANVAS_SIZE, STUDIO_BG_COLOR)
 
     paste_x = (canvas_w - cutout.width) // 2
     paste_y = (canvas_h - cutout.height) // 2
 
-    shadow = _build_drop_shadow(cutout, cutout.size)
-    shadow_y = paste_y + cutout.height - shadow.height // 2
-    shadow_y = min(canvas_h - shadow.height, shadow_y + int(canvas_h * SHADOW_Y_OFFSET_FRACTION))
-    canvas.alpha_composite(shadow, dest=(paste_x, max(0, shadow_y)))
-
-    # Step 5: paste the product on top of the shadow
+    # Step 5: paste the product onto the clean canvas
     canvas.alpha_composite(cutout, dest=(paste_x, paste_y))
 
     final_rgb = canvas.convert("RGB")

@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -32,6 +33,10 @@ export default function StudioCameraScreen({ navigation }) {
   const takePhoto = async () => {
     if (!cameraRef.current || isCapturing) return;
     setIsCapturing(true);
+    
+    // Allow the UI to render the 'isCapturing' spinner before taking the heavy picture
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, shutterSound: false });
       const asset = {
@@ -40,7 +45,12 @@ export default function StudioCameraScreen({ navigation }) {
         mimeType: 'image/jpeg',
       };
       setCapturedAsset(asset);
-      await runEnhancementPreview(asset);
+      
+      // Allow the UI to transition to the preview screen and show the 'isEnhancing' overlay
+      setTimeout(() => {
+        runEnhancementPreview(asset);
+      }, 100);
+      
     } catch (err) {
       Alert.alert('Capture failed', err.message || 'Could not take photo. Please try again.');
     } finally {
@@ -62,7 +72,11 @@ export default function StudioCameraScreen({ navigation }) {
       mimeType: picked.mimeType || 'image/jpeg',
     };
     setCapturedAsset(asset);
-    await runEnhancementPreview(asset);
+    
+    // Allow the UI to transition to the preview screen and show the 'isEnhancing' overlay
+    setTimeout(() => {
+      runEnhancementPreview(asset);
+    }, 100);
   };
 
   const runEnhancementPreview = async (asset) => {
@@ -70,11 +84,19 @@ export default function StudioCameraScreen({ navigation }) {
     setStudioPreviewUri(null);
     try {
       const form = new FormData();
-      form.append('file', { 
-        uri: asset.uri, 
-        name: asset.fileName || 'photo.jpg', 
-        type: asset.mimeType || 'image/jpeg' 
-      });
+      
+      if (Platform.OS === 'web') {
+        const res = await fetch(asset.uri);
+        const blob = await res.blob();
+        form.append('file', blob, asset.fileName || 'photo.jpg');
+      } else {
+        form.append('file', { 
+          uri: asset.uri, 
+          name: asset.fileName || 'photo.jpg', 
+          type: asset.mimeType || 'image/jpeg' 
+        });
+      }
+
       form.append('return_format', 'base64');
 
       const response = await axios.post(`${AI_BASE_URL}/api/ai/enhance-image`, form, {
@@ -85,10 +107,26 @@ export default function StudioCameraScreen({ navigation }) {
       setPreviewMode('after');
     } catch (err) {
       console.warn('[KalaSetu] Preview enhancement failed:', err.message);
-      Alert.alert(
-        'AI enhancement unavailable',
-        'Could not generate a studio preview right now. You can still continue — enhancement will retry automatically.'
-      );
+      
+      // If the backend actively rejected the image due to poor quality/blur (status 400)
+      if (err.response && err.response.status === 400 && err.response.data && err.response.data.detail) {
+        if (Platform.OS === 'web') {
+          window.alert('Low Quality Image: ' + err.response.data.detail);
+        } else {
+          Alert.alert('Low Quality Image', err.response.data.detail);
+        }
+        retake();
+      } else {
+        // Fallback network error
+        if (Platform.OS === 'web') {
+          window.alert('AI enhancement unavailable. Error: ' + err.message);
+        } else {
+          Alert.alert(
+            'AI enhancement unavailable',
+            'Could not generate a studio preview right now. ' + err.message
+          );
+        }
+      }
     } finally {
       setIsEnhancing(false);
     }

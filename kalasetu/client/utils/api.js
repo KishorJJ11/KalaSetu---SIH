@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-const DEV_HOST = '10.0.3.244'; // College Wi-Fi IP
+const DEV_HOST = '192.168.150.193'; // College Wi-Fi IP
 export const API_BASE_URL = `http://${DEV_HOST}:5000`;
 export const AI_BASE_URL = `http://${DEV_HOST}:8000`;
 
@@ -50,11 +50,17 @@ export async function createProduct({ artisanId, title, description, category, r
   if (finalPrice) form.append('finalPrice', String(finalPrice));
 
   if (imageAsset) {
-    form.append('image', {
-      uri: imageAsset.uri,
-      name: imageAsset.fileName || 'craft-photo.jpg',
-      type: imageAsset.mimeType || 'image/jpeg',
-    });
+    if (Platform.OS === 'web') {
+      const res = await fetch(imageAsset.uri);
+      const blob = await res.blob();
+      form.append('image', blob, imageAsset.fileName || 'craft-photo.jpg');
+    } else {
+      form.append('image', {
+        uri: imageAsset.uri,
+        name: imageAsset.fileName || 'craft-photo.jpg',
+        type: imageAsset.mimeType || 'image/jpeg',
+      });
+    }
   }
 
   const { data } = await api.post('/api/products/catalog', form);
@@ -79,11 +85,17 @@ export async function askAssistant(text, audioUri) {
     form.append('text', text);
   }
   if (audioUri) {
-    form.append('audio', {
-      uri: audioUri,
-      name: 'voice-note.m4a',
-      type: 'audio/m4a',
-    });
+    if (Platform.OS === 'web') {
+      const res = await fetch(audioUri);
+      const blob = await res.blob();
+      form.append('audio', blob, 'voice-note.m4a');
+    } else {
+      form.append('audio', {
+        uri: audioUri,
+        name: 'voice-note.m4a',
+        type: 'audio/m4a',
+      });
+    }
   }
   
   // Note: we use AI_BASE_URL because the LLM route is in the Python AI Engine
