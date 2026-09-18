@@ -132,6 +132,7 @@ export default function HomeScreen({ navigation }) {
           style={styles.voiceButton}
           accessibilityRole="button"
           accessibilityLabel="Voice assistant"
+          onPress={() => navigation.navigate('ChatScreen')}
         >
           <Ionicons name="mic" size={26} color={COLORS.primary} />
           <Text style={styles.voiceButtonLabel}>Tap to speak — no typing needed</Text>

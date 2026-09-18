@@ -73,6 +73,24 @@ export async function updateProduct(productId, payload) {
   return data;
 }
 
+export async function askAssistant(text, audioUri) {
+  const form = new FormData();
+  if (text) {
+    form.append('text', text);
+  }
+  if (audioUri) {
+    form.append('audio', {
+      uri: audioUri,
+      name: 'voice-note.m4a',
+      type: 'audio/m4a',
+    });
+  }
+  
+  // Note: we use AI_BASE_URL because the LLM route is in the Python AI Engine
+  const { data } = await axios.post(`${AI_BASE_URL}/api/ai/chat`, form);
+  return data;
+}
+
 export async function deleteProduct(productId) {
   const { data } = await api.delete(`/api/products/${productId}`);
   return data;

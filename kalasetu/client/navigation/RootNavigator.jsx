@@ -12,6 +12,7 @@ import StudioCameraScreen from '../screens/StudioCameraScreen';
 import SmartPricingScreen from '../screens/SmartPricingScreen';
 import CatalogScreen from '../screens/CatalogScreen';
 import BuyerCatalogPreview from '../screens/BuyerCatalogPreview';
+import ChatScreen from '../screens/ChatScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +44,7 @@ export default function RootNavigator() {
             <Stack.Screen name="SmartPricing" component={SmartPricingScreen} />
             <Stack.Screen name="Catalog" component={CatalogScreen} />
             <Stack.Screen name="BuyerPreview" component={BuyerCatalogPreview} />
+            <Stack.Screen name="ChatScreen" component={ChatScreen} />
           </>
         )}
       </Stack.Navigator>

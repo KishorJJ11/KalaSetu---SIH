@@ -118,6 +118,91 @@ async def suggest_price(payload: PriceSuggestionRequest):
     return result
 
 
+@app.post("/api/ai/chat")
+async def chat_assistant(
+    text: str = Form(None),
+    audio: UploadFile = File(None)
+):
+    """
+    Handles LLM chat requests. 
+    Accepts text and/or audio. Returns text response.
+    """
+    if not text and not audio:
+        raise HTTPException(status_code=400, detail="Must provide either text or audio")
+
+    import os
+    import google.generativeai as genai
+    from dotenv import load_dotenv
+
+    # Load from the Node.js server .env file
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', 'server', '.env'))
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is missing from .env")
+
+    genai.configure(api_key=api_key)
+    
+    # We use gemini-3.5-flash for speed and multimodal capabilities
+    model = genai.GenerativeModel(
+        model_name="gemini-3.5-flash",
+        system_instruction=(
+            "You are the KalaSetu Assistant, a helpful AI designed specifically for rural "
+            "Indian artisans and craftspeople. Your goal is to help them understand how to use "
+            "the platform, catalog their products, price items fairly, and answer business queries. "
+            "Speak warmly, simply, and concisely. If they ask questions in regional languages or "
+            "broken English, reply back clearly in a way they can understand."
+        )
+    )
+
+    contents = []
+    
+    if text:
+        contents.append(text)
+        
+    if audio:
+        # Save audio to a temp file, upload to Gemini API, and append to contents
+        import tempfile
+        import mimetypes
+        
+        # Read the file
+        audio_bytes = await audio.read()
+        
+        # Determine extension from mimetype or fallback
+        ext = mimetypes.guess_extension(audio.content_type) or '.m4a'
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_audio:
+            temp_audio.write(audio_bytes)
+            temp_audio_path = temp_audio.name
+            
+        try:
+            # Upload the file to Gemini
+            uploaded_file = genai.upload_file(path=temp_audio_path)
+            contents.append(uploaded_file)
+            
+            # Generate content
+            response = model.generate_content(contents)
+            
+            # Delete the file from Gemini storage afterwards to be clean
+            genai.delete_file(uploaded_file.name)
+        except Exception as e:
+            logger.exception("Gemini audio processing failed")
+            raise HTTPException(status_code=500, detail=f"LLM processing failed: {e}") from e
+        finally:
+            # Clean up local file
+            if os.path.exists(temp_audio_path):
+                os.remove(temp_audio_path)
+    else:
+        # Text only
+        try:
+            response = model.generate_content(contents)
+        except Exception as e:
+            logger.exception("Gemini text processing failed")
+            raise HTTPException(status_code=500, detail=f"LLM processing failed: {e}") from e
+
+    return {"success": True, "text": response.text}
+
+
 if __name__ == "__main__":
     import uvicorn
 
