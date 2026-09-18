@@ -1,11 +1,9 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// Update this to your machine's LAN IP when testing on a physical device,
-// e.g. 'http://192.168.1.42:5000'. Android emulator uses 10.0.2.2 to reach
-// the host machine's localhost.
-const DEV_HOST = '192.168.150.193';
+const DEV_HOST = '10.0.1.209'; // College Wi-Fi IP
 export const API_BASE_URL = `http://${DEV_HOST}:5000`;
+export const AI_BASE_URL = `http://${DEV_HOST}:8000`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -39,7 +37,7 @@ export async function checkPrice(payload) {
   return data;
 }
 
-export async function createProduct({ artisanId, title, description, category, rawCost, laborHours, weightOrSize, skillLevel, imageAsset }) {
+export async function createProduct({ artisanId, title, description, category, rawCost, laborHours, weightOrSize, skillLevel, imageAsset, finalPrice }) {
   const form = new FormData();
   form.append('artisanId', artisanId);
   form.append('title', title);
@@ -49,6 +47,7 @@ export async function createProduct({ artisanId, title, description, category, r
   form.append('laborHours', String(laborHours));
   form.append('weightOrSize', String(weightOrSize || 1));
   if (skillLevel) form.append('skillLevel', skillLevel);
+  if (finalPrice) form.append('finalPrice', String(finalPrice));
 
   if (imageAsset) {
     form.append('image', {
@@ -58,9 +57,7 @@ export async function createProduct({ artisanId, title, description, category, r
     });
   }
 
-  const { data } = await api.post('/api/products/catalog', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const { data } = await api.post('/api/products/catalog', form);
   return data;
 }
 

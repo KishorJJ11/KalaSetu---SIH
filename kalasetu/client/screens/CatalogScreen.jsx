@@ -37,9 +37,13 @@ export default function CatalogScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadCatalog = useCallback(async () => {
-    if (!artisan?.id) return;
+    const artisanId = artisan?._id || artisan?.id;
+    if (!artisanId) {
+      setLoading(false);
+      return;
+    }
     try {
-      const res = await getArtisanCatalog(artisan.id);
+      const res = await getArtisanCatalog(artisanId);
       setProducts(res.data);
     } catch (err) {
       console.warn('[KalaSetu] Catalog load failed:', err.message);

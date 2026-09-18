@@ -12,11 +12,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import axios from 'axios';
 
 import ScreenHeader from '../components/ScreenHeader';
 import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/theme';
-import { API_BASE_URL } from '../utils/api';
+import { API_BASE_URL, AI_BASE_URL } from '../utils/api';
 
 export default function StudioCameraScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -32,7 +33,7 @@ export default function StudioCameraScreen({ navigation }) {
     if (!cameraRef.current || isCapturing) return;
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, shutterSound: false });
       const asset = {
         uri: photo.uri,
         fileName: `craft-${Date.now()}.jpg`,
@@ -69,15 +70,17 @@ export default function StudioCameraScreen({ navigation }) {
     setStudioPreviewUri(null);
     try {
       const form = new FormData();
-      form.append('file', { uri: asset.uri, name: asset.fileName, type: asset.mimeType });
+      form.append('file', { 
+        uri: asset.uri, 
+        name: asset.fileName || 'photo.jpg', 
+        type: asset.mimeType || 'image/jpeg' 
+      });
       form.append('return_format', 'base64');
 
-      const response = await fetch(`${API_BASE_URL.replace(':5000', ':8000')}/api/ai/enhance-image`, {
-        method: 'POST',
-        body: form,
+      const response = await axios.post(`${AI_BASE_URL}/api/ai/enhance-image`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      if (!response.ok) throw new Error('AI enhancement service returned an error.');
-      const json = await response.json();
+      const json = response.data;
       setStudioPreviewUri(json.imageBase64);
       setPreviewMode('after');
     } catch (err) {
@@ -131,17 +134,16 @@ export default function StudioCameraScreen({ navigation }) {
 
       {!capturedAsset ? (
         <View style={styles.cameraWrap}>
-          <CameraView ref={cameraRef} style={styles.camera} facing="back">
-            <View style={styles.framingGuide} pointerEvents="none">
-              <View style={styles.cornerTL} />
-              <View style={styles.cornerTR} />
-              <View style={styles.cornerBL} />
-              <View style={styles.cornerBR} />
-            </View>
-            <View style={styles.guideTextWrap} pointerEvents="none">
-              <Text style={styles.guideText}>Place your craft inside the frame · good light works best</Text>
-            </View>
-          </CameraView>
+          <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+          <View style={styles.framingGuide} pointerEvents="none">
+            <View style={styles.cornerTL} />
+            <View style={styles.cornerTR} />
+            <View style={styles.cornerBL} />
+            <View style={styles.cornerBR} />
+          </View>
+          <View style={styles.guideTextWrap} pointerEvents="none">
+            <Text style={styles.guideText}>Place your craft inside the frame · good light works best</Text>
+          </View>
 
           <View style={styles.captureBar}>
             <TouchableOpacity

@@ -31,6 +31,7 @@ router.post(
       laborHours,
       weightOrSize,
       skillLevel,
+      finalPrice
     } = req.body;
 
     if (!artisanId || !mongoose.isValidObjectId(artisanId)) {
@@ -87,7 +88,7 @@ router.post(
       product.priceBreakdown = pricing.breakdown;
       product.pricePoints = pricing.pricePoints;
       product.suggestedPrice = pricing.pricePoints.recommendedMarketPrice;
-      product.finalPrice = pricing.pricePoints.recommendedMarketPrice;
+      product.finalPrice = finalPrice ? Number(finalPrice) : pricing.pricePoints.recommendedMarketPrice;
     } catch (err) {
       console.error('[KalaSetu] AI pricing suggestion failed:', err.message);
     }

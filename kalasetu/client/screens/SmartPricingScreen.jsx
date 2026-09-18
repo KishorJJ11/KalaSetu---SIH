@@ -36,8 +36,10 @@ export default function SmartPricingScreen({ route, navigation }) {
   const [pricing, setPricing] = useState(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [selectedPrice, setSelectedPrice] = useState(null);
 
-  const canPublish = title.trim().length >= 2 && Boolean(pricing) && !publishing;
+  const artisanId = artisan?._id || artisan?.id;
+  const canPublish = title.trim().length >= 2 && Boolean(pricing) && !publishing && Boolean(selectedPrice);
 
   useEffect(() => {
     setLoadingPrice(true);
@@ -51,6 +53,9 @@ export default function SmartPricingScreen({ route, navigation }) {
           weightOrSize,
         });
         setPricing(res.data);
+        if (res.data?.pricePoints?.recommendedMarketPrice) {
+          setSelectedPrice(res.data.pricePoints.recommendedMarketPrice);
+        }
       } catch (err) {
         console.warn('[KalaSetu] Price check failed:', err.message);
       } finally {
@@ -66,11 +71,11 @@ export default function SmartPricingScreen({ route, navigation }) {
   );
 
   const handlePublish = async () => {
-    if (!canPublish || !artisan?.id) return;
+    if (!canPublish || !artisanId) return;
     setPublishing(true);
     try {
       await createProduct({
-        artisanId: artisan.id,
+        artisanId,
         title: title.trim(),
         description: `${selectedCategory.label} handcrafted by ${artisan.name}`,
         category,
@@ -79,6 +84,7 @@ export default function SmartPricingScreen({ route, navigation }) {
         weightOrSize,
         skillLevel,
         imageAsset,
+        finalPrice: selectedPrice,
       });
       Alert.alert('Published! 🎉', 'Your craft is now live in your catalog.', [
         {
@@ -87,7 +93,12 @@ export default function SmartPricingScreen({ route, navigation }) {
         },
       ]);
     } catch (err) {
-      const message = err?.response?.data?.message || 'Could not publish this product. Please try again.';
+      console.error('[KalaSetu] Publish Error:', err);
+      console.error('[KalaSetu] Publish Error Message:', err.message);
+      if (err.response) {
+        console.error('[KalaSetu] Publish Error Response Data:', err.response.data);
+      }
+      const message = err?.response?.data?.message || err.message || 'Could not publish this product. Please try again.';
       Alert.alert('Publish failed', message);
     } finally {
       setPublishing(false);
@@ -200,17 +211,23 @@ export default function SmartPricingScreen({ route, navigation }) {
                 label="Minimum Price"
                 value={pricing.pricePoints.suggestedMinimumPrice}
                 tone="warning"
+                selected={selectedPrice === pricing.pricePoints.suggestedMinimumPrice}
+                onPress={() => setSelectedPrice(pricing.pricePoints.suggestedMinimumPrice)}
               />
               <PricePointCard
                 label="Recommended Market Price"
                 value={pricing.pricePoints.recommendedMarketPrice}
                 tone="primary"
                 highlighted
+                selected={selectedPrice === pricing.pricePoints.recommendedMarketPrice}
+                onPress={() => setSelectedPrice(pricing.pricePoints.recommendedMarketPrice)}
               />
               <PricePointCard
                 label="Festival / High-Demand Price"
                 value={pricing.pricePoints.highDemandFestivalPrice}
                 tone="success"
+                selected={selectedPrice === pricing.pricePoints.highDemandFestivalPrice}
+                onPress={() => setSelectedPrice(pricing.pricePoints.highDemandFestivalPrice)}
               />
 
               <Text style={styles.rationaleText}>{pricing.rationale.recommendedMarket}</Text>
@@ -257,7 +274,7 @@ function SliderRow({ label, value, onChange, min, max, step, displayValue }) {
   );
 }
 
-function PricePointCard({ label, value, tone, highlighted }) {
+function PricePointCard({ label, value, tone, highlighted, selected, onPress }) {
   const toneColors = {
     warning: { bg: COLORS.warningLight, text: COLORS.warning },
     primary: { bg: '#FFF3E0', text: COLORS.primary },
@@ -265,16 +282,26 @@ function PricePointCard({ label, value, tone, highlighted }) {
   }[tone];
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
       style={[
         styles.pricePointRow,
-        { backgroundColor: toneColors.bg },
+        { backgroundColor: selected ? toneColors.bg : COLORS.surface },
         highlighted && styles.pricePointHighlighted,
+        selected && { borderColor: toneColors.text, borderWidth: 2 }
       ]}
     >
-      <Text style={[styles.pricePointLabel, { color: toneColors.text }]}>{label}</Text>
-      <Text style={[styles.pricePointValue, { color: toneColors.text }]}>{formatINR(value)}</Text>
-    </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.pricePointLabel, { color: selected ? toneColors.text : COLORS.textPrimary }]}>{label}</Text>
+        <Text style={[styles.pricePointValue, { color: selected ? toneColors.text : COLORS.textPrimary }]}>{formatINR(value)}</Text>
+      </View>
+      <Ionicons 
+        name={selected ? "radio-button-on" : "radio-button-off"} 
+        size={24} 
+        color={selected ? toneColors.text : COLORS.textSecondary} 
+      />
+    </TouchableOpacity>
   );
 }
 

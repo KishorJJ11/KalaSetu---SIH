@@ -9,7 +9,7 @@ single mid-range smartphone photo looks catalog-ready.
 import io
 from typing import Tuple
 
-from PIL import Image, ImageFilter, ImageOps, ImageChops
+from PIL import Image, ImageFilter, ImageOps, ImageChops, ImageEnhance
 from rembg import remove, new_session
 
 # rembg session is created once and reused across requests for speed.
@@ -53,11 +53,12 @@ def _build_drop_shadow(cutout: Image.Image, canvas_size: Tuple[int, int]) -> Ima
 def enhance_product_image(image_bytes: bytes) -> bytes:
     """
     Full enhancement pipeline:
-      1. Background removal (rembg / u2net).
-      2. Trim transparent padding to the product's true bounding box.
-      3. Scale product to fit within the studio canvas with margin.
-      4. Composite a soft drop shadow.
-      5. Paste product onto a clean warm off-white studio canvas.
+      1. Auto light enhancement (Brightness, Contrast, Sharpness, Color).
+      2. Background removal (rembg / u2net).
+      3. Trim transparent padding to the product's true bounding box.
+      4. Scale product to fit within the studio canvas with margin.
+      5. Composite a soft drop shadow.
+      6. Paste product onto a clean warm off-white studio canvas.
     Returns the final PNG image as bytes.
     """
     input_img = Image.open(io.BytesIO(image_bytes))
@@ -65,7 +66,17 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     if input_img.mode != "RGBA":
         input_img = input_img.convert("RGBA")
 
-    # Step 1: remove background
+    # Step 1: Light Enhancement
+    # Brightness (15% boost)
+    input_img = ImageEnhance.Brightness(input_img).enhance(1.15)
+    # Contrast (15% boost)
+    input_img = ImageEnhance.Contrast(input_img).enhance(1.15)
+    # Sharpness (20% boost)
+    input_img = ImageEnhance.Sharpness(input_img).enhance(1.20)
+    # Color Saturation (10% boost)
+    input_img = ImageEnhance.Color(input_img).enhance(1.10)
+
+    # Step 2: remove background
     cutout_bytes = remove(
         input_img,
         session=_SESSION,
