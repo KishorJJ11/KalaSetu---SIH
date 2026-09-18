@@ -13,7 +13,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+// import { Audio } from 'expo-av';
+const Audio = {
+  requestPermissionsAsync: async () => ({ status: 'denied' }),
+  setAudioModeAsync: async () => {},
+  Recording: {
+    createAsync: async () => { throw new Error("Audio is temporarily disabled"); }
+  }
+};
 
 import ScreenHeader from '../components/ScreenHeader';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/theme';

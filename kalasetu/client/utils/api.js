@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-const DEV_HOST = '10.0.1.209'; // College Wi-Fi IP
+const DEV_HOST = '10.0.3.244'; // College Wi-Fi IP
 export const API_BASE_URL = `http://${DEV_HOST}:5000`;
 export const AI_BASE_URL = `http://${DEV_HOST}:8000`;
 

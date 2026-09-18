@@ -4,7 +4,6 @@
     "slug": "kalasetu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#FFFFFF"
@@ -27,9 +26,7 @@
         "WRITE_EXTERNAL_STORAGE"
       ]
     },
-    "web": {
-      "favicon": "./assets/icon.png"
-    },
+    "web": {},
     "plugins": [
       [
         "expo-camera",

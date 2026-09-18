@@ -128,16 +128,16 @@ export default function HomeScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={22} color={COLORS.textSecondary} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.voiceButton}
-          accessibilityRole="button"
-          accessibilityLabel="Voice assistant"
-          onPress={() => navigation.navigate('ChatScreen')}
-        >
-          <Ionicons name="mic" size={26} color={COLORS.primary} />
-          <Text style={styles.voiceButtonLabel}>Tap to speak — no typing needed</Text>
-        </TouchableOpacity>
       </ScrollView>
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('ChatScreen')}
+        accessibilityRole="button"
+        accessibilityLabel="AI Assistant"
+      >
+        <Ionicons name="sparkles" size={28} color={COLORS.textOnPrimary} />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -293,21 +293,20 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     marginTop: 2,
   },
-  voiceButton: {
-    flexDirection: 'row',
+  fab: {
+    position: 'absolute',
+    bottom: SPACING.xl,
+    right: SPACING.xl,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    borderStyle: 'dashed',
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    marginTop: SPACING.sm,
-  },
-  voiceButtonLabel: {
-    marginLeft: SPACING.sm,
-    color: COLORS.primary,
-    fontWeight: FONT.weight.semibold,
-    fontSize: FONT.size.sm,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
 });
