@@ -23,7 +23,7 @@ import { useArtisan } from '../context/ArtisanContext';
 const DEBOUNCE_MS = 450;
 
 export default function SmartPricingScreen({ route, navigation }) {
-  const { imageAsset } = route.params || {};
+  const { imageAssets } = route.params || {};
   const { artisan } = useArtisan();
 
   const [title, setTitle] = useState('');
@@ -37,9 +37,12 @@ export default function SmartPricingScreen({ route, navigation }) {
   const [loadingPrice, setLoadingPrice] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [selectedPrice, setSelectedPrice] = useState(null);
+  const [customPrice, setCustomPrice] = useState('');
 
   const artisanId = artisan?._id || artisan?.id;
-  const canPublish = title.trim().length >= 2 && Boolean(pricing) && !publishing && Boolean(selectedPrice);
+  const isCustom = selectedPrice === 'custom';
+  const finalPriceValue = isCustom ? Number(customPrice) : selectedPrice;
+  const canPublish = title.trim().length >= 2 && Boolean(pricing) && !publishing && (finalPriceValue > 0);
 
   useEffect(() => {
     setLoadingPrice(true);
@@ -83,8 +86,8 @@ export default function SmartPricingScreen({ route, navigation }) {
         laborHours: hoursSpent,
         weightOrSize,
         skillLevel,
-        imageAsset,
-        finalPrice: selectedPrice,
+        imageAssets,
+        finalPrice: finalPriceValue,
       });
       Alert.alert('Published! 🎉', 'Your craft is now live in your catalog.', [
         {
@@ -229,6 +232,32 @@ export default function SmartPricingScreen({ route, navigation }) {
                 selected={selectedPrice === pricing.pricePoints.highDemandFestivalPrice}
                 onPress={() => setSelectedPrice(pricing.pricePoints.highDemandFestivalPrice)}
               />
+
+              <View style={styles.customPriceWrap}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setSelectedPrice('custom')}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xs }}
+                >
+                  <Ionicons
+                    name={isCustom ? "radio-button-on" : "radio-button-off"}
+                    size={24}
+                    color={isCustom ? COLORS.primary : COLORS.textSecondary}
+                  />
+                  <Text style={[styles.pricePointLabel, { marginLeft: SPACING.sm, color: isCustom ? COLORS.primary : COLORS.textPrimary }]}>
+                    Set Custom Price
+                  </Text>
+                </TouchableOpacity>
+                {isCustom && (
+                  <TextInput
+                    style={[styles.input, { marginTop: SPACING.xs, marginBottom: 0 }]}
+                    placeholder="Enter custom price (₹)"
+                    keyboardType="numeric"
+                    value={customPrice}
+                    onChangeText={setCustomPrice}
+                  />
+                )}
+              </View>
 
               <Text style={styles.rationaleText}>{pricing.rationale.recommendedMarket}</Text>
             </>
@@ -434,4 +463,12 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     lineHeight: 18,
   },
+  customPriceWrap: {
+    marginTop: SPACING.md,
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  }
 });

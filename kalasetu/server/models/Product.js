@@ -71,11 +71,18 @@ const productSchema = new mongoose.Schema(
     },
     originalImageUrl: {
       type: String,
-      default: '',
+      default: '', // Deprecated: keeping for backward compatibility, use images array instead
     },
     studioImageUrl: {
       type: String,
-      default: '',
+      default: '', // Deprecated: keeping for backward compatibility, use images array instead
+    },
+    images: {
+      type: [{
+        originalUrl: String,
+        studioUrl: String
+      }],
+      default: []
     },
     status: {
       type: String,

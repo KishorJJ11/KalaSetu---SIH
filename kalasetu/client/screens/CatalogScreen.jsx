@@ -73,8 +73,8 @@ export default function CatalogScreen({ navigation }) {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
-      } else if (product.studioImageUrl && (await Sharing.isAvailableAsync())) {
-        await Sharing.shareAsync(product.studioImageUrl);
+      } else if ((product.images?.[0]?.studioUrl || product.studioImageUrl) && (await Sharing.isAvailableAsync())) {
+        await Sharing.shareAsync(product.images?.[0]?.studioUrl || product.studioImageUrl);
       } else {
         Alert.alert('WhatsApp not found', 'Install WhatsApp to share this listing directly.');
       }
@@ -95,8 +95,8 @@ export default function CatalogScreen({ navigation }) {
     return (
       <View style={styles.card}>
         <View style={styles.imageWrap}>
-          {item.studioImageUrl ? (
-            <Image source={{ uri: item.studioImageUrl }} style={styles.image} resizeMode="cover" />
+          {item.images?.length > 0 || item.studioImageUrl ? (
+            <Image source={{ uri: item.images?.[0]?.studioUrl || item.studioImageUrl }} style={styles.image} resizeMode="cover" />
           ) : (
             <View style={[styles.image, styles.imagePlaceholder]}>
               <Ionicons name="image-outline" size={28} color={COLORS.textSecondary} />

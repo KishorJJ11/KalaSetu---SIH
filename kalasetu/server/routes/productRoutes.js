@@ -20,7 +20,7 @@ function absoluteUrl(req, relativePath) {
 // -> (optionally) call AI suggest-price -> persist Product document.
 router.post(
   '/catalog',
-  upload.single('image'),
+  upload.array('images', 5),
   asyncHandler(async (req, res) => {
     const {
       artisanId,
@@ -60,19 +60,34 @@ router.post(
       status: 'processing',
     });
 
-    // Step 1: persist original image + call AI enhancement, if provided.
-    if (req.file) {
-      const ext = extensionFromMimetype(req.file.mimetype);
-      const originalPath = saveImageBuffer(req.file.buffer, 'originals', ext);
-      product.originalImageUrl = originalPath;
+    // Step 1: persist original images + call AI enhancement, if provided.
+    if (req.files && req.files.length > 0) {
+      const processedImages = [];
+      for (const file of req.files) {
+        const ext = extensionFromMimetype(file.mimetype);
+        const originalPath = saveImageBuffer(file.buffer, 'originals', ext);
+        let studioPath = '';
 
-      try {
-        const enhancedBuffer = await enhanceImage(req.file.buffer, req.file.originalname, req.file.mimetype);
-        const studioPath = saveImageBuffer(enhancedBuffer, 'studio', 'png');
-        product.studioImageUrl = studioPath;
-      } catch (err) {
-        console.error('[KalaSetu] AI image enhancement failed:', err.message);
-        // Non-fatal: artisan can retry enhancement later; product still saves.
+        try {
+          const enhancedBuffer = await enhanceImage(file.buffer, file.originalname, file.mimetype);
+          studioPath = saveImageBuffer(enhancedBuffer, 'studio', 'png');
+        } catch (err) {
+          console.error('[KalaSetu] AI image enhancement failed for one image:', err.message);
+          // Fallback to original if enhancement fails
+          studioPath = originalPath;
+        }
+
+        processedImages.push({
+          originalUrl: originalPath,
+          studioUrl: studioPath || originalPath
+        });
+      }
+
+      product.images = processedImages;
+      // Set the first image as the primary legacy fields for backward compatibility
+      if (processedImages.length > 0) {
+        product.originalImageUrl = processedImages[0].originalUrl;
+        product.studioImageUrl = processedImages[0].studioUrl;
       }
     }
 
@@ -93,12 +108,18 @@ router.post(
       console.error('[KalaSetu] AI pricing suggestion failed:', err.message);
     }
 
-    product.status = product.studioImageUrl ? 'live' : 'draft';
+    product.status = (product.images && product.images.length > 0) ? 'live' : 'draft';
     await product.save();
 
     const responseData = product.toObject();
-    responseData.originalImageUrl = absoluteUrl(req, product.originalImageUrl);
-    responseData.studioImageUrl = absoluteUrl(req, product.studioImageUrl);
+    responseData.images = responseData.images.map(img => ({
+      originalUrl: absoluteUrl(req, img.originalUrl),
+      studioUrl: absoluteUrl(req, img.studioUrl)
+    }));
+    
+    // Legacy mapping
+    if (responseData.originalImageUrl) responseData.originalImageUrl = absoluteUrl(req, product.originalImageUrl);
+    if (responseData.studioImageUrl) responseData.studioImageUrl = absoluteUrl(req, product.studioImageUrl);
 
     res.status(201).json({
       success: true,

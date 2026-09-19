@@ -46,8 +46,8 @@ export default function BuyerCatalogPreview({ navigation }) {
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       <View style={styles.imageWrap}>
-        {item.studioImageUrl ? (
-          <Image source={{ uri: item.studioImageUrl }} style={styles.image} resizeMode="cover" />
+        {item.images?.length > 0 || item.studioImageUrl ? (
+          <Image source={{ uri: item.images?.[0]?.studioUrl || item.studioImageUrl }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
             <Ionicons name="image-outline" size={26} color={COLORS.textSecondary} />

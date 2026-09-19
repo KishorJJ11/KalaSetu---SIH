@@ -73,24 +73,13 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     if variance < 100:
         raise ValueError("The photo is not clear. Please capture the image in a good quality.")
         
-    if input_img.mode != "RGBA":
-        input_img = input_img.convert("RGBA")
-
-    # Step 1: Light Enhancement
-    # Brightness (15% boost)
-    input_img = ImageEnhance.Brightness(input_img).enhance(1.15)
-    # Contrast (15% boost)
-    input_img = ImageEnhance.Contrast(input_img).enhance(1.15)
-    # Sharpness (20% boost)
-    input_img = ImageEnhance.Sharpness(input_img).enhance(1.20)
-    # Color Saturation (10% boost)
-    input_img = ImageEnhance.Color(input_img).enhance(1.10)
-
-    # Step 2: remove background
+    # Step 1: Remove background first on the RAW image
+    # We do this before light enhancement because rembg's neural net is trained on 
+    # natural photos. Artificial brightness/contrast can confuse the edge detection.
     cutout_bytes = remove(
         input_img,
         session=_SESSION,
-        alpha_matting=False,  # disabled for sharper edges
+        alpha_matting=False,  # disabled because it can cut off shiny/transparent object edges (like bottles)
     )
     cutout = cutout_bytes if isinstance(cutout_bytes, Image.Image) else Image.open(
         io.BytesIO(cutout_bytes)
@@ -98,7 +87,31 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     if cutout.mode != "RGBA":
         cutout = cutout.convert("RGBA")
 
-    # Step 2: trim transparent padding
+    # Step 2: Dynamic Light Enhancement on the Cutout
+    from PIL import ImageStat
+    
+    # Calculate average brightness of the non-transparent parts
+    # We use the alpha channel as a mask to only measure the object's brightness
+    stat = ImageStat.Stat(cutout.convert("L"), mask=cutout.split()[-1])
+    avg_brightness = stat.mean[0] if stat.mean else 150.0
+    
+    # Target brightness for a well-lit catalog photo
+    target_brightness = 150.0
+    
+    if avg_brightness < target_brightness:
+        brightness_factor = min(target_brightness / max(avg_brightness, 1.0), 1.75)
+    else:
+        brightness_factor = 1.05
+        
+    cutout = ImageEnhance.Brightness(cutout).enhance(brightness_factor)
+    
+    contrast_factor = 1.25 if brightness_factor < 1.3 else 1.15
+    cutout = ImageEnhance.Contrast(cutout).enhance(contrast_factor)
+    
+    cutout = ImageEnhance.Sharpness(cutout).enhance(1.25)
+    cutout = ImageEnhance.Color(cutout).enhance(1.15)
+
+    # Step 3: trim transparent padding
     cutout = _trim_transparent_border(cutout)
 
     # Step 3: scale to fit within canvas

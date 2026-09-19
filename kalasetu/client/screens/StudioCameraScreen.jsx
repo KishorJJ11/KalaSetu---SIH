@@ -24,7 +24,8 @@ export default function StudioCameraScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef(null);
 
-  const [capturedAsset, setCapturedAsset] = useState(null); // { uri, fileName, mimeType }
+  const [capturedAssets, setCapturedAssets] = useState([]); // array of { uri, fileName, mimeType }
+  const [isCameraActive, setIsCameraActive] = useState(true);
   const [studioPreviewUri, setStudioPreviewUri] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -44,12 +45,16 @@ export default function StudioCameraScreen({ navigation }) {
         fileName: `craft-${Date.now()}.jpg`,
         mimeType: 'image/jpeg',
       };
-      setCapturedAsset(asset);
+      const newAssets = [...capturedAssets, asset];
+      setCapturedAssets(newAssets);
+      setIsCameraActive(false);
       
-      // Allow the UI to transition to the preview screen and show the 'isEnhancing' overlay
-      setTimeout(() => {
-        runEnhancementPreview(asset);
-      }, 100);
+      // Only run preview for the first image to save time
+      if (newAssets.length === 1) {
+        setTimeout(() => {
+          runEnhancementPreview(asset);
+        }, 100);
+      }
       
     } catch (err) {
       Alert.alert('Capture failed', err.message || 'Could not take photo. Please try again.');
@@ -71,12 +76,15 @@ export default function StudioCameraScreen({ navigation }) {
       fileName: picked.fileName || `craft-${Date.now()}.jpg`,
       mimeType: picked.mimeType || 'image/jpeg',
     };
-    setCapturedAsset(asset);
+    const newAssets = [...capturedAssets, asset];
+    setCapturedAssets(newAssets);
+    setIsCameraActive(false);
     
-    // Allow the UI to transition to the preview screen and show the 'isEnhancing' overlay
-    setTimeout(() => {
-      runEnhancementPreview(asset);
-    }, 100);
+    if (newAssets.length === 1) {
+      setTimeout(() => {
+        runEnhancementPreview(asset);
+      }, 100);
+    }
   };
 
   const runEnhancementPreview = async (asset) => {
@@ -133,13 +141,14 @@ export default function StudioCameraScreen({ navigation }) {
   };
 
   const retake = () => {
-    setCapturedAsset(null);
+    setCapturedAssets([]);
     setStudioPreviewUri(null);
+    setIsCameraActive(true);
   };
 
   const proceedToPricing = () => {
-    if (!capturedAsset) return;
-    navigation.navigate('SmartPricing', { imageAsset: capturedAsset });
+    if (capturedAssets.length === 0) return;
+    navigation.navigate('SmartPricing', { imageAssets: capturedAssets });
   };
 
   if (!permission) {
@@ -170,7 +179,7 @@ export default function StudioCameraScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScreenHeader title="Studio Camera" subtitle="Frame your craft in the guide" onBack={() => navigation.goBack()} />
 
-      {!capturedAsset ? (
+      {isCameraActive ? (
         <View style={styles.cameraWrap}>
           <CameraView ref={cameraRef} style={styles.camera} facing="back" />
           <View style={styles.framingGuide} pointerEvents="none">
@@ -233,7 +242,7 @@ export default function StudioCameraScreen({ navigation }) {
 
           <View style={styles.imageFrame}>
             {previewMode === 'before' || !studioPreviewUri ? (
-              <Image source={{ uri: capturedAsset.uri }} style={styles.previewImage} resizeMode="cover" />
+              <Image source={{ uri: capturedAssets[0].uri }} style={styles.previewImage} resizeMode="cover" />
             ) : (
               <Image source={{ uri: studioPreviewUri }} style={styles.previewImage} resizeMode="contain" />
             )}
@@ -246,16 +255,33 @@ export default function StudioCameraScreen({ navigation }) {
             )}
           </View>
 
+          <View style={styles.thumbnailStrip}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {capturedAssets.map((asset, index) => (
+                <View key={index} style={styles.thumbnailContainer}>
+                  <Image source={{ uri: asset.uri }} style={styles.thumbnailImage} />
+                  {index === 0 && <View style={styles.mainBadge}><Text style={styles.mainBadgeText}>Main</Text></View>}
+                </View>
+              ))}
+              {capturedAssets.length < 5 && (
+                <TouchableOpacity style={styles.addMoreButton} onPress={() => setIsCameraActive(true)}>
+                  <Ionicons name="add" size={24} color={COLORS.primary} />
+                  <Text style={styles.addMoreText}>Add more</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          </View>
+
           <View style={styles.previewActions}>
             <PrimaryButton
-              label="Retake Photo"
-              icon="camera-reverse-outline"
+              label="Clear All & Retake"
+              icon="trash-outline"
               variant="outline"
               onPress={retake}
               style={{ marginBottom: SPACING.sm }}
             />
             <PrimaryButton
-              label="Next: Set Price"
+              label={`Next: Set Price (${capturedAssets.length} images)`}
               icon="arrow-forward"
               onPress={proceedToPricing}
               disabled={isEnhancing}
@@ -370,14 +396,16 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: '100%' },
   enhancingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)', // Darker background to make loading state obvious
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   enhancingText: {
     color: '#FFFFFF',
-    fontWeight: FONT.weight.semibold,
-    marginTop: SPACING.sm,
+    fontSize: FONT.size.md,
+    fontWeight: FONT.weight.bold,
+    marginTop: SPACING.md,
   },
   previewActions: { marginTop: SPACING.md },
   permissionWrap: {
@@ -398,5 +426,51 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginBottom: SPACING.lg,
+  },
+  thumbnailStrip: {
+    flexDirection: 'row',
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  thumbnailContainer: {
+    marginRight: SPACING.sm,
+    position: 'relative',
+  },
+  thumbnailImage: {
+    width: 60,
+    height: 60,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  mainBadge: {
+    position: 'absolute',
+    bottom: -5,
+    alignSelf: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  mainBadgeText: {
+    color: '#FFF',
+    fontSize: 8,
+    fontWeight: 'bold',
+  },
+  addMoreButton: {
+    width: 60,
+    height: 60,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  addMoreText: {
+    fontSize: 8,
+    color: COLORS.primary,
+    marginTop: 2,
   },
 });
