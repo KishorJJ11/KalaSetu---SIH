@@ -56,21 +56,39 @@ export async function createProduct({ artisanId, title, description, category, r
   if (imageAssets && imageAssets.length > 0) {
     for (let i = 0; i < imageAssets.length; i++) {
       const asset = imageAssets[i];
-      if (Platform.OS === 'web') {
-        const res = await fetch(asset.uri);
-        const blob = await res.blob();
-        form.append('images', blob, asset.fileName || `craft-photo-${i}.jpg`);
-      } else {
-        form.append('images', {
-          uri: asset.uri,
-          name: asset.fileName || `craft-photo-${i}.jpg`,
-          type: asset.mimeType || 'image/jpeg',
-        });
-      }
+      // Use fetch to get a Blob for all platforms (fixes Unsupported FormDataPart in Expo winter fetch)
+      const res = await fetch(asset.uri);
+      const rawBlob = await res.blob();
+      
+      // React Native fetch() on file:/// often returns text/plain or empty type.
+      // We must explicitly set the correct mime type so multer accepts it.
+      const imageType = asset.mimeType || 'image/jpeg';
+      const typedBlob = new Blob([rawBlob], { type: imageType });
+      
+      form.append('images', typedBlob, asset.fileName || `craft-photo-${i}.jpg`);
     }
   }
 
-  const { data } = await api.post('/api/products/catalog', form);
+  const response = await fetch(`${API_BASE_URL}/api/products/catalog`, {
+    method: 'POST',
+    body: form,
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+  
+  if (!response.ok) {
+    let errorMsg = 'Failed to create product';
+    try {
+      const errData = await response.json();
+      errorMsg = errData.message || errData.error || errorMsg;
+    } catch (e) {}
+    const error = new Error(errorMsg);
+    error.response = { data: { message: errorMsg } };
+    throw error;
+  }
+  
+  const data = await response.json();
   return data;
 }
 

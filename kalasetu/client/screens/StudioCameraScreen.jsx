@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
@@ -97,31 +98,47 @@ export default function StudioCameraScreen({ navigation }) {
     await new Promise(resolve => setTimeout(resolve, 100));
     
     try {
-      const form = new FormData();
-      
       if (Platform.OS === 'web') {
+        const form = new FormData();
         const res = await fetch(asset.uri);
         const blob = await res.blob();
         form.append('file', blob, asset.fileName || 'photo.jpg');
-      } else {
-        form.append('file', { 
-          uri: asset.uri, 
-          name: asset.fileName || 'photo.jpg', 
-          type: asset.mimeType || 'image/jpeg' 
+        form.append('return_format', 'base64');
+
+        const response = await axios.post(`${AI_BASE_URL}/api/ai/enhance-image`, form, {
+          headers: { Accept: 'application/json' }
         });
-      }
-
-      form.append('return_format', 'base64');
-
-      // Do NOT set Content-Type manually in React Native, it strips the boundary!
-      const response = await axios.post(`${AI_BASE_URL}/api/ai/enhance-image`, form, {
-        headers: {
-          Accept: 'application/json',
+        setStudioPreviewUri(response.data.imageBase64);
+      } else {
+        // Native (Android/iOS) - Use FileSystem to bypass JS bridge memory limits
+        const response = await FileSystem.uploadAsync(`${AI_BASE_URL}/api/ai/enhance-image`, asset.uri, {
+          fieldName: 'file',
+          httpMethod: 'POST',
+          uploadType: 1, // FileSystemUploadType.MULTIPART is 1
+          parameters: {
+            return_format: 'base64'
+          }
+        });
+        
+        if (response.status !== 200) {
+          let errorMsg = 'Failed to enhance image';
+          try {
+            const errData = JSON.parse(response.body);
+            errorMsg = errData.detail || errorMsg;
+          } catch (e) {}
+          throw { response: { status: response.status, data: { detail: errorMsg } } };
         }
-      });
+
+        const json = JSON.parse(response.body);
+        
+        // Save base64 to a local file so FormData can upload it later
+        const base64Data = json.imageBase64.replace('data:image/png;base64,', '');
+        const tempUri = FileSystem.cacheDirectory + `enhanced-${Date.now()}.png`;
+        await FileSystem.writeAsStringAsync(tempUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
+        
+        setStudioPreviewUri(tempUri);
+      }
       
-      const json = response.data;
-      setStudioPreviewUri(json.imageBase64);
       setPreviewMode('after');
     } catch (err) {
       console.warn('[KalaSetu] Preview enhancement failed:', err.message);
@@ -158,7 +175,13 @@ export default function StudioCameraScreen({ navigation }) {
 
   const proceedToPricing = () => {
     if (capturedAssets.length === 0) return;
-    navigation.navigate('SmartPricing', { imageAssets: capturedAssets });
+    
+    // Pass the enhanced image if they selected the AI Studio tab
+    const finalAssets = previewMode === 'after' && studioPreviewUri 
+      ? [{ uri: studioPreviewUri, fileName: 'enhanced-craft.png', mimeType: 'image/png' }]
+      : capturedAssets;
+      
+    navigation.navigate('SmartPricing', { imageAssets: finalAssets });
   };
 
   if (!permission) {

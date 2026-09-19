@@ -11,6 +11,7 @@ const connectDB = require('./config/db');
 const artisanRoutes = require('./routes/artisanRoutes');
 const productRoutes = require('./routes/productRoutes');
 const marketplaceRoutes = require('./routes/marketplaceRoutes');
+const ondcRoutes = require('./routes/ondcRoutes');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const PORT = process.env.PORT || 5000;
@@ -51,6 +52,7 @@ app.get('/health', (req, res) => {
 app.use('/api/artisans', artisanRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/ondc', ondcRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
