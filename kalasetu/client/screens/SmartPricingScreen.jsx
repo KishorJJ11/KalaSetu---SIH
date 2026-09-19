@@ -8,6 +8,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
+  Switch,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +19,8 @@ import ScreenHeader from '../components/ScreenHeader';
 import PrimaryButton from '../components/PrimaryButton';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/theme';
 import { CRAFT_CATEGORIES, SKILL_LEVELS, formatINR } from '../utils/constants';
-import { checkPrice, createProduct } from '../utils/api';
+import { AudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { checkPrice, createProduct, generateDescriptionFromVoice } from '../utils/api';
 import { useArtisan } from '../context/ArtisanContext';
 
 const DEBOUNCE_MS = 450;
@@ -27,6 +30,7 @@ export default function SmartPricingScreen({ route, navigation }) {
   const { artisan } = useArtisan();
 
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState(artisan?.craftCategory || 'other');
   const [skillLevel, setSkillLevel] = useState(artisan?.skillLevel || 'skilled');
   const [rawMaterialCost, setRawMaterialCost] = useState(200);
@@ -39,10 +43,17 @@ export default function SmartPricingScreen({ route, navigation }) {
   const [selectedPrice, setSelectedPrice] = useState(null);
   const [customPrice, setCustomPrice] = useState('');
 
+  const [activeRecorder, setActiveRecorder] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
+
+  const [isAuction, setIsAuction] = useState(false);
+  const [auctionDuration, setAuctionDuration] = useState(24);
+
   const artisanId = artisan?._id || artisan?.id;
   const isCustom = selectedPrice === 'custom';
   const finalPriceValue = isCustom ? Number(customPrice) : selectedPrice;
-  const canPublish = title.trim().length >= 2 && Boolean(pricing) && !publishing && (finalPriceValue > 0);
+  const canPublish = title.trim().length >= 2 && Boolean(pricing) && !publishing && (finalPriceValue > 0 || isAuction);
 
   useEffect(() => {
     setLoadingPrice(true);
@@ -73,6 +84,55 @@ export default function SmartPricingScreen({ route, navigation }) {
     [category]
   );
 
+  const startRecording = async () => {
+    try {
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (permission.status === 'granted') {
+        const platformOptions = {
+          ...RecordingPresets.HIGH_QUALITY[Platform.OS],
+          isMeteringEnabled: RecordingPresets.HIGH_QUALITY.isMeteringEnabled,
+        };
+        const newRecorder = new AudioModule.AudioRecorder(platformOptions);
+        await newRecorder.prepareToRecordAsync();
+        newRecorder.record();
+        setActiveRecorder(newRecorder);
+        setIsRecording(true);
+      } else {
+        Alert.alert('Permission needed', 'Please grant microphone access to record a voice note.');
+      }
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!activeRecorder) return;
+    await activeRecorder.stop();
+    setIsRecording(false);
+    
+    const uri = activeRecorder.uri;
+    setActiveRecorder(null);
+
+    if (uri) {
+      handleGenerateDescription(uri);
+    }
+  };
+
+  const handleGenerateDescription = async (audioUri) => {
+    setIsGeneratingDesc(true);
+    try {
+      const res = await generateDescriptionFromVoice(audioUri);
+      if (res.success && res.description) {
+        setDescription(res.description);
+      }
+    } catch (err) {
+      console.warn('Desc gen failed:', err);
+      Alert.alert('AI Description Failed', 'Could not generate description from the voice note.');
+    } finally {
+      setIsGeneratingDesc(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!canPublish || !artisanId) return;
     setPublishing(true);
@@ -80,7 +140,7 @@ export default function SmartPricingScreen({ route, navigation }) {
       await createProduct({
         artisanId,
         title: title.trim(),
-        description: `${selectedCategory.label} handcrafted by ${artisan.name}`,
+        description: description.trim() || `${selectedCategory.label} handcrafted by ${artisan.name}`,
         category,
         rawCost: rawMaterialCost,
         laborHours: hoursSpent,
@@ -88,6 +148,8 @@ export default function SmartPricingScreen({ route, navigation }) {
         skillLevel,
         imageAssets,
         finalPrice: finalPriceValue,
+        isAuction,
+        auctionDurationHours: isAuction ? auctionDuration : undefined,
       });
       Alert.alert('Published! 🎉', 'Your craft is now live in your catalog.', [
         {
@@ -120,6 +182,35 @@ export default function SmartPricingScreen({ route, navigation }) {
           placeholderTextColor={COLORS.textSecondary}
           value={title}
           onChangeText={setTitle}
+        />
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xs }}>
+          <Text style={[styles.label, { marginBottom: 0 }]}>SEO Description</Text>
+          <TouchableOpacity 
+            style={styles.micButton} 
+            onPress={isRecording ? stopRecording : startRecording}
+          >
+            {isGeneratingDesc ? (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            ) : (
+              <Ionicons 
+                name={isRecording ? "stop-circle" : "mic"} 
+                size={20} 
+                color={isRecording ? COLORS.error : COLORS.primary} 
+              />
+            )}
+            <Text style={[styles.micText, isRecording && { color: COLORS.error }]}>
+              {isGeneratingDesc ? "Generating AI Desc..." : isRecording ? "Stop Recording" : "Voice Note (Any Lang)"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={[styles.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: SPACING.sm }]}
+          placeholder="Describe your craft... (or use voice note)"
+          placeholderTextColor={COLORS.textSecondary}
+          value={description}
+          onChangeText={setDescription}
+          multiline
         />
 
         <Text style={styles.label}>Category</Text>
@@ -186,80 +277,137 @@ export default function SmartPricingScreen({ route, navigation }) {
           displayValue={`${weightOrSize.toFixed(1)}`}
         />
 
-        <View style={styles.priceCard}>
-          <View style={styles.priceCardHeader}>
+        <View style={styles.pricingCard}>
+          <View style={styles.pricingHeader}>
             <Ionicons name="sparkles" size={20} color={COLORS.primary} />
-            <Text style={styles.priceCardTitle}>AI Suggested Price</Text>
+            <Text style={styles.pricingTitle}>AI Pricing & Format</Text>
             {loadingPrice && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: SPACING.sm }} />}
           </View>
+          
+          <View style={styles.auctionToggleRow}>
+            <View>
+              <Text style={styles.auctionTitle}>Sell via Auction</Text>
+              <Text style={styles.auctionSub}>Let buyers bid over a time period</Text>
+            </View>
+            <Switch 
+              value={isAuction} 
+              onValueChange={setIsAuction}
+              trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
+              thumbColor={isAuction ? COLORS.primary : COLORS.backgroundWarm}
+            />
+          </View>
+
+          {isAuction && (
+            <View style={{ marginBottom: SPACING.lg }}>
+              <Text style={styles.label}>Auction Duration</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACING.xs }}>
+                {[12, 24, 72, 168].map((hours) => (
+                  <TouchableOpacity
+                    key={hours}
+                    style={[styles.chip, auctionDuration === hours && styles.chipActive]}
+                    onPress={() => setAuctionDuration(hours)}
+                  >
+                    <Text style={[styles.chipLabel, auctionDuration === hours && styles.chipLabelActive]}>
+                      {hours >= 24 ? `${hours / 24} Days` : `${hours} Hours`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={[styles.label, { marginTop: SPACING.md }]}>Starting Bid Price</Text>
+            </View>
+          )}
+
+          {!isAuction && <Text style={[styles.label, { marginTop: SPACING.sm }]}>Suggested Fixed Price</Text>}
 
           {pricing ? (
             <>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Material Cost</Text>
-                <Text style={styles.breakdownValue}>{formatINR(pricing.breakdown.materialCost)}</Text>
-              </View>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Fair Artisan Wage</Text>
-                <Text style={styles.breakdownValue}>{formatINR(pricing.breakdown.fairArtisanWage)}</Text>
-              </View>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Retail Benchmark Margin</Text>
-                <Text style={styles.breakdownValue}>{pricing.breakdown.marginAppliedPercent}%</Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              <PricePointCard
-                label="Minimum Price"
-                value={pricing.pricePoints.suggestedMinimumPrice}
-                tone="warning"
-                selected={selectedPrice === pricing.pricePoints.suggestedMinimumPrice}
-                onPress={() => setSelectedPrice(pricing.pricePoints.suggestedMinimumPrice)}
-              />
-              <PricePointCard
-                label="Recommended Market Price"
-                value={pricing.pricePoints.recommendedMarketPrice}
-                tone="primary"
-                highlighted
-                selected={selectedPrice === pricing.pricePoints.recommendedMarketPrice}
-                onPress={() => setSelectedPrice(pricing.pricePoints.recommendedMarketPrice)}
-              />
-              <PricePointCard
-                label="Festival / High-Demand Price"
-                value={pricing.pricePoints.highDemandFestivalPrice}
-                tone="success"
-                selected={selectedPrice === pricing.pricePoints.highDemandFestivalPrice}
-                onPress={() => setSelectedPrice(pricing.pricePoints.highDemandFestivalPrice)}
-              />
-
-              <View style={styles.customPriceWrap}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setSelectedPrice('custom')}
-                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xs }}
-                >
-                  <Ionicons
-                    name={isCustom ? "radio-button-on" : "radio-button-off"}
-                    size={24}
-                    color={isCustom ? COLORS.primary : COLORS.textSecondary}
+              {isAuction ? (
+                <>
+                  <PricePointCard
+                    label="Minimum Safe Start"
+                    value={pricing.pricePoints.suggestedMinimumPrice}
+                    tone="warning"
+                    selected={selectedPrice === pricing.pricePoints.suggestedMinimumPrice}
+                    onPress={() => setSelectedPrice(pricing.pricePoints.suggestedMinimumPrice)}
                   />
-                  <Text style={[styles.pricePointLabel, { marginLeft: SPACING.sm, color: isCustom ? COLORS.primary : COLORS.textPrimary }]}>
-                    Set Custom Price
-                  </Text>
-                </TouchableOpacity>
-                {isCustom && (
-                  <TextInput
-                    style={[styles.input, { marginTop: SPACING.xs, marginBottom: 0 }]}
-                    placeholder="Enter custom price (₹)"
-                    keyboardType="numeric"
-                    value={customPrice}
-                    onChangeText={setCustomPrice}
+                  <PricePointCard
+                    label="Recommended Start Price"
+                    value={pricing.pricePoints.recommendedMarketPrice}
+                    tone="primary"
+                    highlighted
+                    selected={selectedPrice === pricing.pricePoints.recommendedMarketPrice}
+                    onPress={() => setSelectedPrice(pricing.pricePoints.recommendedMarketPrice)}
                   />
-                )}
-              </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Material Cost</Text>
+                    <Text style={styles.breakdownValue}>{formatINR(pricing.breakdown.materialCost)}</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Fair Artisan Wage</Text>
+                    <Text style={styles.breakdownValue}>{formatINR(pricing.breakdown.fairArtisanWage)}</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Retail Benchmark Margin</Text>
+                    <Text style={styles.breakdownValue}>{pricing.breakdown.marginAppliedPercent}%</Text>
+                  </View>
 
-              <Text style={styles.rationaleText}>{pricing.rationale.recommendedMarket}</Text>
+                  <View style={styles.divider} />
+
+                  <PricePointCard
+                    label="Minimum Price"
+                    value={pricing.pricePoints.suggestedMinimumPrice}
+                    tone="warning"
+                    selected={selectedPrice === pricing.pricePoints.suggestedMinimumPrice}
+                    onPress={() => setSelectedPrice(pricing.pricePoints.suggestedMinimumPrice)}
+                  />
+                  <PricePointCard
+                    label="Recommended Market Price"
+                    value={pricing.pricePoints.recommendedMarketPrice}
+                    tone="primary"
+                    highlighted
+                    selected={selectedPrice === pricing.pricePoints.recommendedMarketPrice}
+                    onPress={() => setSelectedPrice(pricing.pricePoints.recommendedMarketPrice)}
+                  />
+                  <PricePointCard
+                    label="Festival / High-Demand Price"
+                    value={pricing.pricePoints.highDemandFestivalPrice}
+                    tone="success"
+                    selected={selectedPrice === pricing.pricePoints.highDemandFestivalPrice}
+                    onPress={() => setSelectedPrice(pricing.pricePoints.highDemandFestivalPrice)}
+                  />
+
+                  <View style={styles.customPriceWrap}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => setSelectedPrice('custom')}
+                      style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xs }}
+                    >
+                      <Ionicons
+                        name={isCustom ? "radio-button-on" : "radio-button-off"}
+                        size={24}
+                        color={isCustom ? COLORS.primary : COLORS.textSecondary}
+                      />
+                      <Text style={[styles.pricePointLabel, { marginLeft: SPACING.sm, color: isCustom ? COLORS.primary : COLORS.textPrimary }]}>
+                        Set Custom Price
+                      </Text>
+                    </TouchableOpacity>
+                    {isCustom && (
+                      <TextInput
+                        style={[styles.input, { marginTop: SPACING.xs, marginBottom: 0 }]}
+                        placeholder="Enter custom price (₹)"
+                        keyboardType="numeric"
+                        value={customPrice}
+                        onChangeText={setCustomPrice}
+                      />
+                    )}
+                  </View>
+
+                  <Text style={styles.rationaleText}>{pricing.rationale.recommendedMarket}</Text>
+                </>
+              )}
             </>
           ) : (
             <View style={{ paddingVertical: SPACING.lg, alignItems: 'center' }}>
@@ -470,5 +618,19 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
     borderColor: COLORS.border,
+  },
+  micButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
+  },
+  micText: {
+    fontSize: FONT.size.xs,
+    fontWeight: FONT.weight.bold,
+    color: COLORS.primary,
+    marginLeft: 4,
   }
 });

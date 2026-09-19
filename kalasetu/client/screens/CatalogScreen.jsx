@@ -18,7 +18,7 @@ import * as Sharing from 'expo-sharing';
 
 import ScreenHeader from '../components/ScreenHeader';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/theme';
-import { getArtisanCatalog } from '../utils/api';
+import { getArtisanCatalog, acceptAuctionBid } from '../utils/api';
 import { categoryLabel, formatINR } from '../utils/constants';
 import { useArtisan } from '../context/ArtisanContext';
 
@@ -90,8 +90,37 @@ export default function CatalogScreen({ navigation }) {
     );
   };
 
+  const handleAcceptBid = async (product) => {
+    if ((product.currentHighestBid || 0) <= 0) {
+      Alert.alert('No Bids', 'There are no bids to accept yet.');
+      return;
+    }
+    
+    Alert.alert(
+      'Accept Bid?',
+      `Are you sure you want to accept the highest bid of ${formatINR(product.currentHighestBid)}? This will end the auction and mark the item as Sold Out.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            try {
+              await acceptAuctionBid(product._id || product.id);
+              Alert.alert('Success', 'Bid accepted! Product is now Sold Out.');
+              loadCatalog();
+            } catch (err) {
+              Alert.alert('Error', err.response?.data?.message || err.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderItem = ({ item }) => {
     const statusMeta = STATUS_META[item.status] || STATUS_META.draft;
+    const isAuction = item.isAuction;
+    const isAuctionActive = item.auctionStatus === 'active';
     return (
       <View style={styles.card}>
         <View style={styles.imageWrap}>
@@ -112,7 +141,25 @@ export default function CatalogScreen({ navigation }) {
             {item.title}
           </Text>
           <Text style={styles.cardCategory}>{categoryLabel(item.category)}</Text>
-          <Text style={styles.cardPrice}>{formatINR(item.finalPrice)}</Text>
+          
+          {isAuction ? (
+            <View style={{ marginTop: SPACING.xs }}>
+              <Text style={{ fontSize: 10, color: COLORS.textSecondary }}>
+                {isAuctionActive ? 'Current Highest Bid' : 'Auction Final Bid'}
+              </Text>
+              <Text style={styles.cardPrice}>{formatINR(item.currentHighestBid || item.finalPrice)}</Text>
+              {isAuctionActive && (
+                <TouchableOpacity 
+                  style={styles.acceptBtn} 
+                  onPress={() => handleAcceptBid(item)}
+                >
+                  <Text style={styles.acceptBtnText}>Accept Bid</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.cardPrice}>{formatINR(item.finalPrice)}</Text>
+          )}
 
           <View style={styles.cardActions}>
             <TouchableOpacity
@@ -258,22 +305,32 @@ const styles = StyleSheet.create({
   cardActions: {
     flexDirection: 'row',
     marginTop: SPACING.sm,
-    gap: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.sm,
   },
   shareButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
-    paddingVertical: 6,
   },
   shareButtonText: {
-    fontSize: 11,
+    fontSize: FONT.size.xs,
     fontWeight: FONT.weight.semibold,
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
     marginLeft: 4,
   },
+  acceptBtn: {
+    marginTop: SPACING.xs,
+    backgroundColor: COLORS.success,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+    alignItems: 'center',
+  },
+  acceptBtnText: {
+    color: '#fff',
+    fontSize: FONT.size.xs,
+    fontWeight: FONT.weight.bold,
+  }
 });

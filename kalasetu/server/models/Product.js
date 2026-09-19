@@ -103,6 +103,28 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    isAuction: {
+      type: Boolean,
+      default: false,
+    },
+    auctionEndTime: {
+      type: Date,
+    },
+    currentHighestBid: {
+      type: Number,
+      default: 0,
+    },
+    auctionStatus: {
+      type: String,
+      enum: ['active', 'ended', 'accepted', 'rejected'],
+    },
+    bids: [
+      {
+        amount: Number,
+        bidderName: String,
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -31,7 +31,9 @@ router.post(
       laborHours,
       weightOrSize,
       skillLevel,
-      finalPrice
+      finalPrice,
+      isAuction,
+      auctionDurationHours
     } = req.body;
 
     if (!artisanId || !mongoose.isValidObjectId(artisanId)) {
@@ -58,7 +60,16 @@ router.post(
       weightOrSize: weightOrSize ? Number(weightOrSize) : 1,
       artisanId: artisan._id,
       status: 'processing',
+      isAuction: isAuction === 'true' || isAuction === true,
     });
+
+    if (product.isAuction && auctionDurationHours) {
+      const hours = Number(auctionDurationHours);
+      if (!isNaN(hours) && hours > 0) {
+        product.auctionEndTime = new Date(Date.now() + hours * 60 * 60 * 1000);
+        product.auctionStatus = 'active';
+      }
+    }
 
     // Step 1: persist original images + call AI enhancement, if provided.
     if (req.files && req.files.length > 0) {
@@ -202,11 +213,18 @@ router.get(
 
     const products = await Product.find(filter).sort({ createdAt: -1 });
 
-    const data = products.map((p) => ({
-      ...p.toObject(),
-      originalImageUrl: absoluteUrl(req, p.originalImageUrl),
-      studioImageUrl: absoluteUrl(req, p.studioImageUrl),
-    }));
+    const data = products.map((p) => {
+      const obj = p.toObject();
+      return {
+        ...obj,
+        originalImageUrl: absoluteUrl(req, obj.originalImageUrl),
+        studioImageUrl: absoluteUrl(req, obj.studioImageUrl),
+        images: (obj.images || []).map(img => ({
+          originalUrl: absoluteUrl(req, img.originalUrl),
+          studioUrl: absoluteUrl(req, img.studioUrl)
+        }))
+      };
+    });
 
     res.json({ success: true, count: data.length, data });
   })
@@ -246,6 +264,77 @@ router.delete(
       throw new Error('Product not found.');
     }
     res.json({ success: true, message: 'Product removed.' });
+  })
+);
+
+// POST /api/products/:productId/bid
+router.post(
+  '/:productId/bid',
+  asyncHandler(async (req, res) => {
+    const { amount, bidderName } = req.body;
+    const bidAmount = Number(amount);
+
+    if (!bidAmount || !bidderName) {
+      res.status(400);
+      throw new Error('Bid amount and bidderName are required.');
+    }
+
+    const product = await Product.findById(req.params.productId);
+    if (!product) {
+      res.status(404);
+      throw new Error('Product not found.');
+    }
+
+    if (!product.isAuction || product.auctionStatus !== 'active') {
+      res.status(400);
+      throw new Error('This product is not currently active in an auction.');
+    }
+
+    if (product.auctionEndTime && product.auctionEndTime < new Date()) {
+      product.auctionStatus = 'ended';
+      await product.save();
+      res.status(400);
+      throw new Error('The auction has already ended.');
+    }
+
+    if (bidAmount <= (product.currentHighestBid || 0) && bidAmount <= (product.finalPrice || 0)) {
+      res.status(400);
+      throw new Error('Bid must be higher than the current highest bid or starting price.');
+    }
+
+    product.currentHighestBid = bidAmount;
+    product.bids.push({ amount: bidAmount, bidderName });
+    await product.save();
+
+    res.json({ success: true, message: 'Bid placed successfully!', data: product });
+  })
+);
+
+// POST /api/products/:productId/accept-bid
+router.post(
+  '/:productId/accept-bid',
+  asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.productId);
+    if (!product) {
+      res.status(404);
+      throw new Error('Product not found.');
+    }
+
+    if (!product.isAuction) {
+      res.status(400);
+      throw new Error('Not an auction product.');
+    }
+
+    if (product.currentHighestBid <= 0) {
+      res.status(400);
+      throw new Error('No valid bids to accept.');
+    }
+
+    product.auctionStatus = 'accepted';
+    product.status = 'sold_out';
+    await product.save();
+
+    res.json({ success: true, message: 'Bid accepted and product marked as sold.', data: product });
   })
 );
 

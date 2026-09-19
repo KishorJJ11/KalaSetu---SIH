@@ -37,7 +37,7 @@ export async function checkPrice(payload) {
   return data;
 }
 
-export async function createProduct({ artisanId, title, description, category, rawCost, laborHours, weightOrSize, skillLevel, imageAssets, finalPrice }) {
+export async function createProduct({ artisanId, title, description, category, rawCost, laborHours, weightOrSize, skillLevel, imageAssets, finalPrice, isAuction, auctionDurationHours }) {
   const form = new FormData();
   form.append('artisanId', artisanId);
   form.append('title', title);
@@ -48,6 +48,10 @@ export async function createProduct({ artisanId, title, description, category, r
   form.append('weightOrSize', String(weightOrSize || 1));
   if (skillLevel) form.append('skillLevel', skillLevel);
   if (finalPrice) form.append('finalPrice', String(finalPrice));
+  if (isAuction) {
+    form.append('isAuction', 'true');
+    if (auctionDurationHours) form.append('auctionDurationHours', String(auctionDurationHours));
+  }
 
   if (imageAssets && imageAssets.length > 0) {
     for (let i = 0; i < imageAssets.length; i++) {
@@ -82,6 +86,16 @@ export async function updateProduct(productId, payload) {
   return data;
 }
 
+export async function placeBid(productId, amount, bidderName) {
+  const { data } = await api.post(`/api/products/${productId}/bid`, { amount, bidderName });
+  return data;
+}
+
+export async function acceptAuctionBid(productId) {
+  const { data } = await api.post(`/api/products/${productId}/accept-bid`);
+  return data;
+}
+
 export async function askAssistant(text, audioUri) {
   const form = new FormData();
   if (text) {
@@ -93,8 +107,12 @@ export async function askAssistant(text, audioUri) {
       const blob = await res.blob();
       form.append('audio', blob, 'voice-note.m4a');
     } else {
+      const fileUri = Platform.OS === 'android' && !audioUri.startsWith('file://') 
+        ? `file://${audioUri}` 
+        : audioUri;
+        
       form.append('audio', {
-        uri: audioUri,
+        uri: fileUri,
         name: 'voice-note.m4a',
         type: 'audio/m4a',
       });
@@ -108,6 +126,33 @@ export async function askAssistant(text, audioUri) {
 
 export async function deleteProduct(productId) {
   const { data } = await api.delete(`/api/products/${productId}`);
+  return data;
+}
+
+export async function generateDescriptionFromVoice(audioUri) {
+  const form = new FormData();
+  if (Platform.OS === 'web') {
+    const res = await fetch(audioUri);
+    const blob = await res.blob();
+    form.append('audio', blob, 'voice-note.m4a');
+  } else {
+    const fileUri = Platform.OS === 'android' && !audioUri.startsWith('file://') 
+      ? `file://${audioUri}` 
+      : audioUri;
+
+    form.append('audio', {
+      uri: fileUri,
+      name: 'voice-note.m4a',
+      type: 'audio/m4a',
+    });
+  }
+
+  const { data } = await axios.post(`${AI_BASE_URL}/api/ai/generate-description`, form, {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+  
   return data;
 }
 

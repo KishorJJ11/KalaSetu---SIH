@@ -11,13 +11,18 @@ Run:
 """
 
 import base64
+import io
 import logging
+import shutil
 import time
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from pydantic import BaseModel
 
+from bhashini_client import generate_seo_description_from_audio
 from image_processor import enhance_product_image
 from pricing_engine import calculate_price
 from schemas import HealthResponse, PriceSuggestionRequest, PriceSuggestionResponse
@@ -164,37 +169,21 @@ async def chat_assistant(
         contents.append(text)
         
     if audio:
-        # Save audio to a temp file, upload to Gemini API, and append to contents
-        import tempfile
-        import mimetypes
-        
-        # Read the file
+        # Read the file and pass inline to Gemini API
         audio_bytes = await audio.read()
         
-        # Determine extension from mimetype or fallback
-        ext = mimetypes.guess_extension(audio.content_type) or '.m4a'
+        audio_part = {
+            "mime_type": audio.content_type or "audio/m4a",
+            "data": audio_bytes
+        }
+        contents.append(audio_part)
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_audio:
-            temp_audio.write(audio_bytes)
-            temp_audio_path = temp_audio.name
-            
         try:
-            # Upload the file to Gemini
-            uploaded_file = genai.upload_file(path=temp_audio_path)
-            contents.append(uploaded_file)
-            
             # Generate content
             response = model.generate_content(contents)
-            
-            # Delete the file from Gemini storage afterwards to be clean
-            genai.delete_file(uploaded_file.name)
         except Exception as e:
             logger.exception("Gemini audio processing failed")
             raise HTTPException(status_code=500, detail=f"LLM processing failed: {e}") from e
-        finally:
-            # Clean up local file
-            if os.path.exists(temp_audio_path):
-                os.remove(temp_audio_path)
     else:
         # Text only
         try:
@@ -204,6 +193,35 @@ async def chat_assistant(
             raise HTTPException(status_code=500, detail=f"LLM processing failed: {e}") from e
 
     return {"success": True, "text": response.text}
+
+
+@app.post("/api/ai/generate-description")
+async def generate_description_endpoint(audio: UploadFile = File(...)):
+    """
+    Accepts an audio file (voice note), passes it through Bhashini for ASR/Translation
+    (or Gemini as a fallback), and generates an SEO-friendly description using Gemini.
+    """
+    import os
+    import tempfile
+    import mimetypes
+    
+    # Determine extension from mimetype or fallback
+    ext = mimetypes.guess_extension(audio.content_type) or '.m4a'
+    audio_bytes = await audio.read()
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_audio:
+        temp_audio.write(audio_bytes)
+        temp_audio_path = temp_audio.name
+        
+    try:
+        desc = generate_seo_description_from_audio(temp_audio_path)
+        return {"success": True, "description": desc}
+    except Exception as e:
+        logger.exception("Failed to generate description from audio")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    finally:
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
 
 
 if __name__ == "__main__":
