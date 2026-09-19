@@ -66,12 +66,8 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     input_img = Image.open(io.BytesIO(image_bytes))
     input_img = ImageOps.exif_transpose(input_img)  # respect phone camera orientation
     
-    # --- Blur Detection ---
-    laplacian_kernel = ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1)
-    edges = input_img.convert("L").filter(laplacian_kernel)
-    variance = np.var(np.array(edges, dtype=np.float64))
-    if variance < 100:
-        raise ValueError("The photo is not clear. Please capture the image in a good quality.")
+    # --- Blur Detection Removed ---
+    # We no longer reject images based on variance.
         
     # Step 1: Remove background first on the RAW image
     # We do this before light enhancement because rembg's neural net is trained on 
@@ -99,17 +95,20 @@ def enhance_product_image(image_bytes: bytes) -> bytes:
     target_brightness = 150.0
     
     if avg_brightness < target_brightness:
-        brightness_factor = min(target_brightness / max(avg_brightness, 1.0), 1.75)
+        # Reduced max brightness factor from 1.75 to 1.25
+        brightness_factor = min(target_brightness / max(avg_brightness, 1.0), 1.25)
     else:
-        brightness_factor = 1.05
+        brightness_factor = 1.0
         
     cutout = ImageEnhance.Brightness(cutout).enhance(brightness_factor)
     
-    contrast_factor = 1.25 if brightness_factor < 1.3 else 1.15
+    # Reduced contrast
+    contrast_factor = 1.1 if brightness_factor < 1.15 else 1.05
     cutout = ImageEnhance.Contrast(cutout).enhance(contrast_factor)
     
-    cutout = ImageEnhance.Sharpness(cutout).enhance(1.25)
-    cutout = ImageEnhance.Color(cutout).enhance(1.15)
+    # Reduced sharpness and color enhancement
+    cutout = ImageEnhance.Sharpness(cutout).enhance(1.1)
+    cutout = ImageEnhance.Color(cutout).enhance(1.05)
 
     # Step 3: trim transparent padding
     cutout = _trim_transparent_border(cutout)

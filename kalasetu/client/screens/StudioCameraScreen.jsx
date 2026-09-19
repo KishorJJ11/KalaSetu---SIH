@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -90,6 +91,11 @@ export default function StudioCameraScreen({ navigation }) {
   const runEnhancementPreview = async (asset) => {
     setIsEnhancing(true);
     setStudioPreviewUri(null);
+    
+    // Yield to the UI thread so the loading animation can actually render
+    // before we do heavy file reading and networking
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       const form = new FormData();
       
@@ -107,9 +113,13 @@ export default function StudioCameraScreen({ navigation }) {
 
       form.append('return_format', 'base64');
 
+      // Do NOT set Content-Type manually in React Native, it strips the boundary!
       const response = await axios.post(`${AI_BASE_URL}/api/ai/enhance-image`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: {
+          Accept: 'application/json',
+        }
       });
+      
       const json = response.data;
       setStudioPreviewUri(json.imageBase64);
       setPreviewMode('after');
